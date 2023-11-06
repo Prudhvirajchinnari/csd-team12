@@ -1,0 +1,349 @@
+import warnings
+warnings.simplefilter("ignore")
+import joblib
+
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+%matplotlib inline
+import scipy.stats as stats
+from scipy.stats import zscore
+
+#from imblearn.over_sampling import SMOTE
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.neighbors import KNeighborsClassifier
+#import xgboost as xgb
+#import lightgbm as lgb
+
+from sklearn import metrics
+from sklearn.metrics import classification_report
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import GridSearchCV
+
+df = pd.read_csv("/content/WineQT.csv")
+
+df
+
+df.shape
+
+df.isnull().sum()
+
+ df.info()
+
+df.describe()
+
+df.skew()
+
+plt.figure(figsize=(10,7))
+sns.countplot(x ='quality', data = df)
+plt.xlabel('Quality of Red Wine')
+plt.ylabel('Count of Rows in the dataset')
+plt.show()
+
+index=0
+labels = df['quality']
+features = df.drop('quality', axis=1)
+
+for col in features.items():
+    plt.figure(figsize=(10,5))
+    sns.barplot(x=labels, y=col[index], data=df, color="deeppink")
+plt.tight_layout()
+plt.show()
+
+df = df.drop('free sulfur dioxide', axis=1)
+df
+
+df.shape
+
+z=np.abs(zscore(df))
+threshold=3
+np.where(z>3)
+
+df=df[(z<3).all(axis=1)]
+df
+
+df.shape
+
+# Percentage of Data Loss
+
+data_loss=(1599-1464)/1599*100
+# 1599 (number of rows in the original dataframe) and 1464 (number of rows after outlier removal)
+data_loss
+
+X = df.drop('quality', axis=1)
+Y = df['quality']
+
+Y.value_counts()
+
+oversample = SMOTE()
+X, Y = oversample.fit_resample(X, Y)
+
+Y.value_counts()
+
+Y = Y.apply(lambda y_value:1 if y_value>=7 else 0) # 1 is for good quality and 0 for bad (not good) quality
+Y # Displaying the label after applying label binarization
+
+X
+
+scaler = StandardScaler()
+X = pd.DataFrame(scaler.fit_transform(X), columns=X.columns)
+X # Displaying all the features after applying scaling technique to avoid bias output
+
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=21)
+
+def classify(model, X, Y):
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=21)
+
+    # Training the model
+    model.fit(X_train, Y_train)
+
+    # Predicting Y_test
+    pred = model.predict(X_test)
+
+    # Accuracy Score
+    acc_score = (accuracy_score(Y_test, pred))*100
+    print("Accuracy Score:", acc_score)
+
+    # Classification Report
+    class_report = classification_report(Y_test, pred)
+    print("\nClassification Report:\n", class_report)
+
+    # Cross Validation Score
+    cv_score = (cross_val_score(model, X, Y, cv=5).mean())*100
+    print("Cross Validation Score:", cv_score)
+
+    # Result of accuracy minus cv scores
+    result = acc_score - cv_score
+    print("\nAccuracy Score - Cross Validation Score is", result)
+
+model=LogisticRegression()
+classify(model, X, Y)
+
+model=SVC(C=1.0, kernel='rbf', gamma='auto', random_state=42)
+classify(model, X, Y)
+
+model=DecisionTreeClassifier(random_state=21, max_depth=15)
+classify(model, X, Y)
+
+model=RandomForestClassifier(max_depth=15, random_state=111)
+classify(model, X, Y)
+
+model=KNeighborsClassifier(n_neighbors=15)
+classify(model, X, Y)
+
+model=ExtraTreesClassifier()
+classify(model, X, Y)
+
+model=xgb.XGBClassifier(verbosity=0)
+classify(model, X, Y)
+
+Final_Model = SVC(decision_function_shape='ovo', gamma='scale', kernel='rbf', probability=True, random_state=21,
+                 shrinking=True, verbose=True)
+Classifier = Final_Model.fit(X_train, Y_train)
+fmod_pred = Final_Model.predict(X_test)
+fmod_acc = (accuracy_score(Y_test, fmod_pred))*100
+print("Accuracy score for the Best Model is:", fmod_acc)
+
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, roc_auc_score
+
+# Calculate ROC curve and AUC
+fpr, tpr, thresholds = roc_curve(Y_test, Final_Model.predict_proba(X_test)[:, 1])
+auc = roc_auc_score(Y_test, Final_Model.predict_proba(X_test)[:, 1])
+
+# Plot ROC curve
+plt.figure()
+plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {auc:.2f})')
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curve')
+plt.legend(loc='lower right')
+plt.show()
+
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, roc_auc_score
+from sklearn.linear_model import LogisticRegression
+
+# Create and train a logistic regression model
+logistic_model = LogisticRegression(random_state=21)
+logistic_model.fit(X_train, Y_train)
+
+# Calculate ROC curve and AUC for the logistic regression model
+fpr, tpr, thresholds = roc_curve(Y_test, logistic_model.predict_proba(X_test)[:, 1])
+auc = roc_auc_score(Y_test, logistic_model.predict_proba(X_test)[:, 1])
+
+# Plot ROC curve
+plt.figure()
+plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {auc:.2f})')
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curve for Logistic Regression')
+plt.legend(loc='lower right')
+plt.show()
+
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, roc_auc_score
+from sklearn.tree import DecisionTreeClassifier
+
+# Create and train a Decision Tree Classifier
+decision_tree_model = DecisionTreeClassifier(random_state=21)
+decision_tree_model.fit(X_train, Y_train)
+
+# Calculate ROC curve and AUC for the Decision Tree Classifier
+fpr, tpr, thresholds = roc_curve(Y_test, decision_tree_model.predict_proba(X_test)[:, 1])
+auc = roc_auc_score(Y_test, decision_tree_model.predict_proba(X_test)[:, 1])
+
+# Plot ROC curve
+plt.figure()
+plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {auc:.2f})')
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curve for Decision Tree Classifier')
+plt.legend(loc='lower right')
+plt.show()
+
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, roc_auc_score
+from sklearn.ensemble import RandomForestClassifier
+
+# Create and train a Random Forest Classifier
+random_forest_model = RandomForestClassifier(random_state=21)
+random_forest_model.fit(X_train, Y_train)
+
+# Calculate ROC curve and AUC for the Random Forest Classifier
+fpr, tpr, thresholds = roc_curve(Y_test, random_forest_model.predict_proba(X_test)[:, 1])
+auc = roc_auc_score(Y_test, random_forest_model.predict_proba(X_test)[:, 1])
+
+# Plot ROC curve
+plt.figure()
+plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {auc:.2f})')
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curve for Random Forest Classifier')
+plt.legend(loc='lower right')
+plt.show()
+
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, roc_auc_score
+from sklearn.neighbors import KNeighborsClassifier
+
+# Create and train a KNeighborsClassifier
+k_neighbors_model = KNeighborsClassifier()
+k_neighbors_model.fit(X_train, Y_train)
+
+# Calculate ROC curve and AUC for the KNeighborsClassifier
+fpr, tpr, thresholds = roc_curve(Y_test, k_neighbors_model.predict_proba(X_test)[:, 1])
+auc = roc_auc_score(Y_test, k_neighbors_model.predict_proba(X_test)[:, 1])
+
+# Plot ROC curve
+plt.figure()
+plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {auc:.2f})')
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curve for KNeighborsClassifier')
+plt.legend(loc='lower right')
+plt.show()
+
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, roc_auc_score
+from sklearn.ensemble import ExtraTreesClassifier
+
+# Create and train an ExtraTree Classifier
+extra_tree_model = ExtraTreesClassifier(random_state=21)
+extra_tree_model.fit(X_train, Y_train)
+
+# Calculate ROC curve and AUC for the ExtraTree Classifier
+fpr, tpr, thresholds = roc_curve(Y_test, extra_tree_model.predict_proba(X_test)[:, 1])
+auc = roc_auc_score(Y_test, extra_tree_model.predict_proba(X_test)[:, 1])
+
+# Plot ROC curve
+plt.figure()
+plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {auc:.2f})')
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curve for ExtraTree Classifier')
+plt.legend(loc='lower right')
+plt.show()
+
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, roc_auc_score
+from xgboost import XGBClassifier
+
+# Create and train an XGBoost Classifier
+xgb_model = XGBClassifier(random_state=21)
+xgb_model.fit(X_train, Y_train)
+
+# Calculate ROC curve and AUC for the XGBoost Classifier
+fpr, tpr, thresholds = roc_curve(Y_test, xgb_model.predict_proba(X_test)[:, 1])
+auc = roc_auc_score(Y_test, xgb_model.predict_proba(X_test)[:, 1])
+
+# Plot ROC curve
+plt.figure()
+plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {auc:.2f})')
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curve for XGBoost Classifier')
+plt.legend(loc='lower right')
+plt.show()
+
+from sklearn.naive_bayes import GaussianNB  # Import the appropriate Naive Bayes class
+
+# Create and initialize the Naive Bayes model (Gaussian Naive Bayes in this example)
+naive_bayes_model = GaussianNB()
+
+# Call the classify function with the Naive Bayes model
+classify(naive_bayes_model, X, Y)
+
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, roc_auc_score
+from sklearn.naive_bayes import GaussianNB  # Import the appropriate Naive Bayes class
+
+# Create and train a Gaussian Naive Bayes model
+naive_bayes_model = GaussianNB()
+naive_bayes_model.fit(X_train, Y_train)
+
+# Calculate ROC curve and AUC for the Naive Bayes model
+fpr, tpr, thresholds = roc_curve(Y_test, naive_bayes_model.predict_proba(X_test)[:, 1])
+auc = roc_auc_score(Y_test, naive_bayes_model.predict_proba(X_test)[:, 1])
+
+# Plot ROC curve
+plt.figure()
+plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {auc:.2f})')
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curve for Naive Bayes Classifier')
+plt.legend(loc='lower right')
+plt.show()
+
